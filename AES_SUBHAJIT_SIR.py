@@ -32,7 +32,7 @@ def decrypt_aes_key(enc_key, hash_key):
 
 # Streamlit UI
 st.title("Encryption and Decryption with Deterministic Image and QR Code")
-
+st.info("developed by Debojyoti Ghosh")
 # Input section
 mode = st.radio("Mode", ["Encrypt", "Decrypt"])
 if mode == "Encrypt":
