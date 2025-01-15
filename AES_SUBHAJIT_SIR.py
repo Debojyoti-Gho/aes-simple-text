@@ -32,15 +32,17 @@ def decrypt_aes_key(enc_key, hash_key):
 
 # Streamlit UI
 st.title("Encryption and Decryption with Deterministic Image and QR Code")
-st.info("developed by Debojyoti Ghosh")
+
 # Input section
 mode = st.radio("Mode", ["Encrypt", "Decrypt"])
+
 if mode == "Encrypt":
     plain_text = st.text_input("Plain Text")
     aes_type = st.selectbox("AES Type", [128, 192, 256])
+    aes_mode = st.selectbox("AES Mode", ["ECB", "CBC", "CFB", "OFB", "CTR"])
     n1 = st.number_input("Real Number N1", value=0.0, format="%.5f")
     n2 = st.number_input("Real Number N2", value=0.0, format="%.5f")
-    
+
     if st.button("Encrypt"):
         # Generate AES key
         aes_key = get_random_bytes(aes_type // 8)
@@ -55,14 +57,31 @@ if mode == "Encrypt":
         qr_buffer = BytesIO()
         qr.save(qr_buffer, format="PNG")
         qr_buffer.seek(0)
-        # Encrypt the plain text using the AES key
-        cipher = AES.new(aes_key, AES.MODE_ECB)
-        ciphertext = cipher.encrypt(pad(plain_text.encode(), AES.block_size))
-        
+
+        # Encrypt the plain text using the AES key and selected mode
+        if aes_mode == "ECB":
+            cipher = AES.new(aes_key, AES.MODE_ECB)
+            ciphertext = cipher.encrypt(pad(plain_text.encode(), AES.block_size))
+        elif aes_mode == "CBC":
+            iv = get_random_bytes(AES.block_size)
+            cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+            ciphertext = iv + cipher.encrypt(pad(plain_text.encode(), AES.block_size))
+        elif aes_mode == "CFB":
+            iv = get_random_bytes(AES.block_size)
+            cipher = AES.new(aes_key, AES.MODE_CFB, iv)
+            ciphertext = iv + cipher.encrypt(plain_text.encode())
+        elif aes_mode == "OFB":
+            iv = get_random_bytes(AES.block_size)
+            cipher = AES.new(aes_key, AES.MODE_OFB, iv)
+            ciphertext = iv + cipher.encrypt(plain_text.encode())
+        elif aes_mode == "CTR":
+            cipher = AES.new(aes_key, AES.MODE_CTR)
+            ciphertext = cipher.nonce + cipher.encrypt(plain_text.encode())
+
         st.success("Encryption Successful!")
         st.write("Ciphertext (in bytes):", ciphertext)
         st.image(qr_buffer, caption="QR Code with Encrypted AES Key")
-        
+
         # Add a download button for the QR code
         st.download_button(
             label="Download QR Code",
@@ -70,14 +89,15 @@ if mode == "Encrypt":
             file_name="encrypted_aes_key_qr.png",
             mime="image/png"
         )
-        
+
 elif mode == "Decrypt":
     ciphertext_input = st.text_area("Ciphertext (Enter as bytes, e.g., b'\\x...')")
     qr_code_file = st.file_uploader("Upload QR Code (PNG)", type=["png"])
     aes_type = st.selectbox("AES Type", [128, 192, 256])
+    aes_mode = st.selectbox("AES Mode", ["ECB", "CBC", "CFB", "OFB", "CTR"])
     n1 = st.number_input("Real Number N1", value=0.0, format="%.5f")
     n2 = st.number_input("Real Number N2", value=0.0, format="%.5f")
-    
+
     if st.button("Decrypt"):
         try:
             if qr_code_file:
@@ -88,31 +108,42 @@ elif mode == "Decrypt":
                 qr_data, _, _ = qr_detector.detectAndDecode(qr_image)
                 if not qr_data:
                     raise ValueError("No data found in QR code.")
-                
-                st.write("Decoded QR Data (binary):", repr(qr_data))  # Debugging output
-                
-                # Decode QR data as raw bytes
+
                 enc_aes_key = qr_data.encode('latin1')  # Preserve raw binary data
-                
+
                 # Regenerate the deterministic image and hash it
                 img = generate_deterministic_image(n1, n2)
                 hash_key = hash_image(img)
-                
-                # Ensure hash key length matches AES key length
-                hash_key_segment = hash_key[:aes_type // 8]
-                
+
                 # Decrypt the AES key
-                aes_key = decrypt_aes_key(enc_aes_key, hash_key_segment)
-                
+                aes_key = decrypt_aes_key(enc_aes_key, hash_key[:aes_type // 8])
+
                 # Convert ciphertext input to bytes
                 ciphertext = eval(ciphertext_input)
                 if not isinstance(ciphertext, bytes):
                     raise ValueError("Ciphertext must be in bytes format.")
-                
-                # Decrypt the ciphertext
-                cipher = AES.new(aes_key, AES.MODE_ECB)
-                plain_text = unpad(cipher.decrypt(ciphertext), AES.block_size)
-                
+
+                # Decrypt the ciphertext using the selected mode
+                if aes_mode == "ECB":
+                    cipher = AES.new(aes_key, AES.MODE_ECB)
+                    plain_text = unpad(cipher.decrypt(ciphertext), AES.block_size)
+                elif aes_mode == "CBC":
+                    iv = ciphertext[:AES.block_size]
+                    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+                    plain_text = unpad(cipher.decrypt(ciphertext[AES.block_size:]), AES.block_size)
+                elif aes_mode == "CFB":
+                    iv = ciphertext[:AES.block_size]
+                    cipher = AES.new(aes_key, AES.MODE_CFB, iv)
+                    plain_text = cipher.decrypt(ciphertext[AES.block_size:])
+                elif aes_mode == "OFB":
+                    iv = ciphertext[:AES.block_size]
+                    cipher = AES.new(aes_key, AES.MODE_OFB, iv)
+                    plain_text = cipher.decrypt(ciphertext[AES.block_size:])
+                elif aes_mode == "CTR":
+                    nonce = ciphertext[:AES.block_size // 2]
+                    cipher = AES.new(aes_key, AES.MODE_CTR, nonce=nonce)
+                    plain_text = cipher.decrypt(ciphertext[AES.block_size // 2:])
+
                 st.success("Decryption Successful!")
                 st.write("Decrypted Plain Text:", plain_text.decode())
             else:
