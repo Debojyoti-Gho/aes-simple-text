@@ -80,6 +80,11 @@ if mode == "Encrypt":
 
         st.success("Encryption Successful!")
         st.write("Ciphertext (in bytes):", ciphertext)
+
+        # Automatically copy the ciphertext to clipboard
+        st.success("Copy the Ciphertext below to your clipboard with the copy button available!")
+        st.code(ciphertext.hex(), language="text")
+        
         st.image(qr_buffer, caption="QR Code with Encrypted AES Key")
 
         # Add a download button for the QR code
@@ -91,7 +96,7 @@ if mode == "Encrypt":
         )
 
 elif mode == "Decrypt":
-    ciphertext_input = st.text_area("Ciphertext (Enter as bytes, e.g., b'\\x...')")
+    ciphertext_input = st.text_input("Ciphertext (Paste hex here)")
     qr_code_file = st.file_uploader("Upload QR Code (PNG)", type=["png"])
     aes_type = st.selectbox("AES Type", [128, 192, 256])
     aes_mode = st.selectbox("AES Mode", ["ECB", "CBC", "CFB", "OFB", "CTR"])
@@ -119,9 +124,7 @@ elif mode == "Decrypt":
                 aes_key = decrypt_aes_key(enc_aes_key, hash_key[:aes_type // 8])
 
                 # Convert ciphertext input to bytes
-                ciphertext = eval(ciphertext_input)
-                if not isinstance(ciphertext, bytes):
-                    raise ValueError("Ciphertext must be in bytes format.")
+                ciphertext = bytes.fromhex(ciphertext_input)
 
                 # Decrypt the ciphertext using the selected mode
                 if aes_mode == "ECB":
